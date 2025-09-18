@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hearing Options</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Accessibility for Hearing</h1>
+    <p>Choose your preference:</p>
+    
+    <div class="button-group">
+      <button onclick="showSpeechToText()">🎤 Speech to Text</button>
+      <button onclick="showSignToText()">👋 Sign Language to Text</button>
+    </div>
+
+    <!-- Speech to Text Section (UNCHANGED) -->
+    <div id="speechSection" class="feature-section" style="display:none;">
+      <h2>🎤 Real-Time Speech to Text</h2>
+      <div class="button-group">
+        <button id="recordBtn" onclick="toggleSpeechRecognition()">🎙️ Start Listening</button>
+        <button onclick="clearSpeechOutput()">🗑️ Clear</button>
+      </div>
+      <div id="recordingStatus" class="status"></div>
+      
+      <div style="margin: 20px 0;">
+        <h3>Current Speech (Live):</h3>
+        <div id="currentSpeech" class="output-box" style="background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+          Listening for current speech...
+        </div>
+        
+        <h3>Full Conversation:</h3>
+        <div id="fullConversation" class="output-box" style="background: rgba(40, 167, 69, 0.1); border-color: #28a745;">
+          Complete conversation will appear here...
+        </div>
+      </div>
+    </div>
+
+    <!-- Sign Language Section (UPDATED) -->
+    <div id="signSection" class="feature-section" style="display:none;">
+      <h2>👋 Sign Language to Text</h2>
+      <div class="button-group">
+        <button id="cameraBtn" onclick="toggleCamera()">📹 Start Camera</button>
+        <button onclick="resetBuffer()">🔄 Reset Buffer</button>
+        <button onclick="clearSignOutput()">🗑️ Clear</button>
+      </div>
+      
+      <!-- Progress indicator -->
+      <div id="progressContainer" style="margin: 10px 0; display:none;">
+        <div style="background: #f0f0f0; border-radius: 10px; overflow: hidden;">
+          <div id="progressBar" style="height: 20px; background: linear-gradient(90deg, #64ffda, #00bcd4); width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <small id="progressText">Collecting frames: 0/30</small>
+      </div>
+      
+      <div class="camera-container">
+        <video id="video" width="400" height="300" autoplay muted style="display:none;"></video>
+        <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
+      </div>
+      <div id="signStatus" class="status"></div>
+      <div id="signOutput" class="output-box">Enable camera to start sign language detection...</div>
+      
+      <!-- Recognition history -->
+      <div id="recognitionHistory" style="margin-top: 20px;">
+        <h4>Recognition History:</h4>
+        <div id="historyList" class="output-box" style="max-height: 150px; overflow-y: auto;">
+          No signs recognized yet...
+        </div>
+      </div>
+    </div>
+
+    <br>
+    <button class="back" onclick="goBack()">⬅️ Back</button>
+  </div>
+
+  <script>
+    let recognition;
+    let isRecording = false;
+    let videoStream;
+    let isCameraOn = false;
+    let trackingInterval;
+    let recognitionHistory = [];
+
+    // Show/Hide sections
+    function showSpeechToText() {
+      document.getElementById('speechSection').style.display = 'block';
+      document.getElementById('signSection').style.display = 'none';
+    }
+
+    function showSignToText() {
+      document.getElementById('speechSection').style.display = 'none';
+      document.getElementById('signSection').style.display = 'block';
+    }
+
+    function goBack() {
+      if (isRecording) toggleSpeechRecognition();
+      if (isCameraOn) stopCamera();
+      location.href = 'index.html';
+    }
+
+    // --------------------
+    // Speech to Text using Web Speech API (UNCHANGED)
+    // --------------------
+    function toggleSpeechRecognition() {
+      const outputBox = document.getElementById('currentSpeech');
+      const fullBox = document.getElementById('fullConversation');
+      const statusBox = document.getElementById('recordingStatus');
+      const recordBtn = document.getElementById('recordBtn');
+
+      if (!isRecording) {
+        if (!('webkitSpeechRecognition' in window)) {
+          alert('Speech Recognition not supported in this browser. Use Chrome or Edge.');
+          return;
+        }
+
+        recognition = new webkitSpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        recognition.continuous = true;
+
+        recognition.onresult = (event) => {
+          let interimTranscript = '';
+          let finalTranscript = fullBox.textContent;
+
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            let transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          outputBox.textContent = interimTranscript || 'Listening...';
+          fullBox.textContent = finalTranscript;
+        };
+
+        recognition.onerror = (event) => {
+          console.error('Speech recognition error', event);
+        };
+
+        recognition.onend = () => {
+          if (isRecording) recognition.start(); // restart if accidentally stopped
+        };
+
+        recognition.start();
+        isRecording = true;
+        recordBtn.textContent = '⏹️ Stop Listening';
+        recordBtn.style.background = '#ff6b6b';
+        statusBox.textContent = '🎙️ Listening...';
+        statusBox.style.background = '#d1ecf1';
+      } else {
+        recognition.stop();
+        isRecording = false;
+        recordBtn.textContent = '🎙️ Start Listening';
+        recordBtn.style.background = '#64ffda';
+        statusBox.textContent = '🛑 Stopped';
+        statusBox.style.background = '#fff3cd';
+      }
+    }
+
+    function clearSpeechOutput() {
+      document.getElementById('currentSpeech').textContent = 'Listening for current speech...';
+      document.getElementById('fullConversation').textContent = 'Complete conversation will appear here...';
+      document.getElementById('recordingStatus').textContent = '';
+    }
+
+    // --------------------
+    // Sign Language Functions (UPDATED)
+    // --------------------
+    async function toggleCamera() {
+      if (isCameraOn) stopCamera();
+      else startCamera();
+    }
+
+    async function startCamera() {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 300 } });
+        const video = document.getElementById('video');
+        video.srcObject = videoStream;
+        video.style.display = 'block';
+        isCameraOn = true;
+        document.getElementById('cameraBtn').textContent = '📹 Stop Camera';
+        document.getElementById('cameraBtn').style.background = '#ff6b6b';
+        document.getElementById('signStatus').textContent = '📹 Camera active - Start signing!';
+        document.getElementById('signStatus').style.background = '#d1ecf1';
+        document.getElementById('progressContainer').style.display = 'block';
+        startTracking();
+      } catch (err) {
+        alert('Camera access denied: ' + err.message);
+      }
+    }
+
+    function stopCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+        const video = document.getElementById('video');
+        video.style.display = 'none';
+        video.srcObject = null;
+        isCameraOn = false;
+        document.getElementById('cameraBtn').textContent = '📹 Start Camera';
+        document.getElementById('cameraBtn').style.background = '#64ffda';
+        document.getElementById('signStatus').textContent = '';
+        document.getElementById('progressContainer').style.display = 'none';
+        stopTracking();
+      }
+    }
+
+    async function captureFrame() {
+      if (!isCameraOn) return;
+      
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, 400, 300);
+      const imageData = canvas.toDataURL('image/jpeg');
+
+      try {
+        const response = await fetch('http://127.0.0.1:5000/sign-to-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_data: imageData })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          // Update progress bar
+          updateProgress(result.buffer_size || 0, result.frames_needed || 30);
+          
+          // Update main output
+          document.getElementById('signOutput').innerHTML = 
+            `<strong>Status:</strong> ${result.text}<br>
+             <small>Hands detected: ${result.hands_count} | Method: ${result.method}</small>`;
+          
+          // If we got a real prediction (not status message), add to history
+          if (result.method && result.method.includes('WLASL Model') && !result.text.includes('Collecting') && !result.text.includes('Waiting')) {
+            addToHistory(result.text, result.method);
+          }
+          
+          document.getElementById('signStatus').textContent = '✅ Processing...';
+          document.getElementById('signStatus').style.background = '#d4edda';
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (err) {
+        console.error('Sign language error:', err);
+        document.getElementById('signOutput').textContent = 'Error: ' + err.message;
+        document.getElementById('signStatus').textContent = '❌ Connection error';
+        document.getElementById('signStatus').style.background = '#f8d7da';
+      }
+    }
+
+    function updateProgress(current, total) {
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const percentage = (current / total) * 100;
+      
+      progressBar.style.width = `${percentage}%`;
+      progressText.textContent = `Collecting frames: ${current}/${total}`;
+    }
+
+    function addToHistory(text, method) {
+      const timestamp = new Date().toLocaleTimeString();
+      recognitionHistory.unshift(`[${timestamp}] ${text} (${method})`);
+      
+      // Keep only last 10 items
+      if (recognitionHistory.length > 10) {
+        recognitionHistory = recognitionHistory.slice(0, 10);
+      }
+      
+      const historyList = document.getElementById('historyList');
+      historyList.innerHTML = recognitionHistory.join('<br>') || 'No signs recognized yet...';
+    }
+
+    async function resetBuffer() {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/reset-buffer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('signStatus').textContent = '🔄 Buffer reset - Ready for new sign!';
+          document.getElementById('signStatus').style.background = '#d1ecf1';
+          updateProgress(0, 30);
+        }
+      } catch (err) {
+        console.error('Reset error:', err);
+      }
+    }
+
+    function clearSignOutput() {
+      document.getElementById('signOutput').textContent = 'Enable camera to start sign language detection...';
+      document.getElementById('signStatus').textContent = '';
+      recognitionHistory = [];
+      document.getElementById('historyList').textContent = 'No signs recognized yet...';
+      updateProgress(0, 30);
+    }
+
+    async function startTracking() {
+      if (!isCameraOn) return;
+      trackingInterval = setInterval(captureFrame, 200); // every 200ms
+    }
+
+    function stopTracking() {
+      if (trackingInterval) clearInterval(trackingInterval);
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+      if (isRecording) toggleSpeechRecognition();
+      if (isCameraOn) stopCamera();
+    });
+  </script>
+</body>
+</html>
